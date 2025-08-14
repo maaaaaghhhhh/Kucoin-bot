@@ -6,7 +6,7 @@ import threading
 from flask import Flask
 
 # ================= تنظیمات =================
-TELEGRAM_TOKEN = "8447614855:AAECwe6GXGQkCYzmc4DYkK0oI3Qjrfs9NAs:A"  # جایگزین توکن شما
+TELEGRAM_TOKEN = "8447614855:AAECwe6GXGQkCYzmc4DYkK0oI3Qjrfs9NAs"  # جایگزین توکن شما
 CHAT_ID = "402657176"                       # جایگزین Chat ID شما
 CHECK_INTERVAL = 60  # بررسی هر 60 ثانیه
 
