@@ -21,17 +21,22 @@ def is_range_breakout(symbol):
     try:
         ohlcv = exchange.fetch_ohlcv(symbol, timeframe='5m', limit=20)
         closes = [c[4] for c in ohlcv]
+        highs = [c[2] for c in ohlcv]
+        lows = [c[3] for c in ohlcv]
+        volumes = [c[5] for c in ohlcv]  # حجم دلاری
+        
         high = max(closes[:-1])
         low = min(closes[:-1])
         last_close = closes[-1]
+        last_volume = volumes[-1] * last_close  # تبدیل به دلار تقریبی
         
         range_percent = (high - low) / low * 100
         
-        # شرط رنج: تغییرات کمتر از 3 درصد (شُل‌تر)
-        if range_percent <= 3 and last_close > high:
+        # شرط رنج: تغییرات کمتر از 3 درصد و حجم آخر ≥ 50k دلار
+        if range_percent <= 3 and last_close > high and last_volume >= 50000:
             return True
-    except:
-        pass
+    except Exception as e:
+        print(f"خطا در بررسی {symbol}:", e)
     return False
 
 def main():
