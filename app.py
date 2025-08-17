@@ -1,75 +1,62 @@
-import requests
 import time
-import pandas as pd
-from binance.client import Client
+import requests
+from kucoin.client import Market
 
-# توکن و آیدی تلگرام شما
+# توکن و آی‌دی تلگرام
 TELEGRAM_TOKEN = "8447614855:AAECwe6GXGQkCYzmc4DYkK0oI3Qjrfs9NAs"
-TELEGRAM_CHAT_ID = "402657176"
+CHAT_ID = "402657176"
 
-# کلاینت بایننس (برای داده‌ها نیاز به API key نداره)
-client = Client()
+# اتصال به API کوکوین
+client = Market(url='https://api.kucoin.com')
 
-def send_telegram(message: str):
+# تابع ارسال پیام تلگرام
+def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+    data = {"chat_id": CHAT_ID, "text": message}
     try:
-        requests.post(url, data=payload)
+        requests.post(url, data=data)
     except Exception as e:
-        print("خطا در ارسال تلگرام:", e)
+        print("Telegram error:", e)
 
-def get_klines(symbol, interval, limit=50):
+# بررسی جفت ارزها
+def check_pairs():
     try:
-        klines = client.get_klines(symbol=symbol, interval=interval, limit=limit)
-        df = pd.DataFrame(klines, columns=[
-            "time","o","h","l","c","v","ct","qv","nt","tb","tbv","ig"
-        ])
-        df["o"] = df["o"].astype(float)
-        df["h"] = df["h"].astype(float)
-        df["l"] = df["l"].astype(float)
-        df["c"] = df["c"].astype(float)
-        return df
+        symbols = client.get_symbol_list()
+        usdt_pairs = [s['symbol'] for s in symbols if s['symbol'].endswith("USDT")]
     except Exception as e:
-        print("خطا در دریافت داده:", e)
-        return None
+        send_telegram_message(f"❌ خطا در دریافت جفت ارزها: {e}")
+        return
 
-def check_range(symbol, interval):
-    df = get_klines(symbol, interval, 50)
-    if df is None or df.empty:
-        return None
+    signals_found = False
+    for pair in usdt_pairs:
+        for tf in ["5min", "15min"]:
+            try:
+                klines = client.get_kline(pair, tf, 100)
+                closes = [float(k[2]) for k in klines]  # قیمت بسته شدن
+                high = max(closes)
+                low = min(closes)
+                last_price = closes[-1]
 
-    high = df["h"].max()
-    low = df["l"].min()
-    last_close = df["c"].iloc[-1]
+                if low == 0:
+                    continue
 
-    range_percent = (high - low) / low * 100
+                range_percent = ((high - low) / low) * 100
 
-    if 2 <= range_percent <= 10:
-        if last_close > high * 0.995:  # نزدیک شکست سقف
-            return f"{symbol} | TF: {interval} | Range: {range_percent:.2f}% | Break ↑"
-    return None
+                # بررسی محدوده رنج بین ۲٪ تا ۱۰٪
+                if 2 <= range_percent <= 10:
+                    # بررسی شکست به سمت بالا
+                    if last_price > high * 0.995:
+                        msg = f"📈 شکست رنج {range_percent:.2f}% در {pair} ({tf})"
+                        send_telegram_message(msg)
+                        signals_found = True
 
-def main():
-    while True:
-        try:
-            tickers = client.get_ticker()
-            usdt_pairs = [t["symbol"] for t in tickers if t["symbol"].endswith("USDT")]
+            except Exception as e:
+                print(f"Error with {pair} - {tf}: {e}")
 
-            found = False
-            for symbol in usdt_pairs:
-                for interval in ["5m", "15m"]:
-                    signal = check_range(symbol, interval)
-                    if signal:
-                        send_telegram(signal)
-                        found = True
+    if not signals_found:
+        send_telegram_message("ℹ️ هیچ سیگنالی در این دور پیدا نشد.")
 
-            if not found:
-                send_telegram("✅ بررسی شد: سیگنالی در این لحظه نبود.")
-
-        except Exception as e:
-            print("Error in main loop:", e)
-
-        time.sleep(300)  # هر 5 دقیقه یکبار
-
-if __name__ == "__main__":
-    main()
+# اجرای مداوم هر ۵ دقیقه
+while True:
+    check_pairs()
+    time.sleep(300)  # 300 ثانیه = ۵ دقیقه
